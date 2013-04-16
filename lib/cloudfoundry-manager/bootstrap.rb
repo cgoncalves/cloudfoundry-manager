@@ -32,13 +32,17 @@ module Cloudfoundry
       #  @domain = domain
       #end
 
-      def setup(id, domain)
-        cmd = "/home/#{@user}/setup-cf.bash #{domain}"
+      def setup(id, domain, ip)
+        cmd = "/home/#{@user}/setup-cf.bash #{domain} #{ip}"
         exec_pty(cmd)
         cloud = {
           id: id,
-          location: location,
           domain: domain,
+          ssh: {
+            host: @host,
+            user: @user,
+            password: @password
+          },
           nats: {
             host: @host,
             user: 'nats',
@@ -48,21 +52,26 @@ module Cloudfoundry
         }
         Cloudfoundry::Manager::config['clouds'].push(cloud)
         Cloudfoundry::Manager.save_config
+        stop
+        start
+        true
       end
 
       def start
+        puts "Starting PaaS instance..."
         cmd = "/home/#{@user}/cloudfoundry/vcap/dev_setup/bin/vcap_dev start"
-        exec_pty(cmd, @password)
+        exec_pty(cmd)
       end
 
       def stop
+        puts "Stopping PaaS instance..."
         cmd = "/home/#{@user}/cloudfoundry/vcap/dev_setup/bin/vcap_dev stop"
-        exec_pty(cmd, @password)
+        exec_pty(cmd)
       end
 
       def restart
         cmd = "/home/#{@user}/cloudfoundry/vcap/dev_setup/bin/vcap_dev restart"
-        exec_pty(cmd, @password)
+        exec_pty(cmd)
       end
 
       #def self.log(domain)
@@ -119,6 +128,9 @@ module Cloudfoundry
 
       def exec_pty(cmd, &block)
         @ssh.open_channel do |channel|
+          channel.on_data do |ch, data|
+            puts data
+          end
           channel.request_pty
           channel.exec(cmd)
           yield channel if block
